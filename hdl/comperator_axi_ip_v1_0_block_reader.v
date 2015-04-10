@@ -37,7 +37,8 @@ module comperator_axi_ip_v1_0_block_reader
     
     go,
     done,
-    block
+    block,
+    count
 );
     localparam DATA_WIDTH = 24;
     localparam BLOCK_WIDTH = BLOCK_SIZE*DATA_WIDTH;
@@ -54,6 +55,7 @@ module comperator_axi_ip_v1_0_block_reader
     input wire go;
     output reg done;
     output reg [BLOCK_WIDTH-1:0] block;
+    output reg [15:0] count;
 
     localparam STATE_RESET = 3'b000;
     localparam STATE_READY = 3'b001;
@@ -64,7 +66,6 @@ module comperator_axi_ip_v1_0_block_reader
     
     reg [2:0] state;
 	reg [2:0] Nstate;
-    reg [15:0] count;
     
     initial
     begin

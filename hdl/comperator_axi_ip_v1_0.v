@@ -76,17 +76,30 @@
 	);
 	localparam BLOCK_SIZE = 8;
     localparam FRAME_WIDTH = 320;
+    localparam LINE_WIDTH = FRAME_WIDTH*DATA_WIDTH;
+    localparam BLOCK_WIDTH = BLOCK_SIZE*DATA_WIDTH;    
     
     wire soft_reset;
     wire go;
     wire go_0, go_1;
     wire frame_0_done, frame_1_done;
+    wire frame_0_eol, frame_1_eol;
+    wire frame_0_sof, frame_1_sof;
     wire running;
+    
+    wire [15:0] block_count;
+    wire [15:0] line_count;
+    
+    wire cmp_go;
+    wire cmp_done;
     
     wire frame0_ready;
     wire frame1_ready;
     
     wire resetn;
+    
+    wire [BLOCK_WIDTH-1:0] block;
+    wire [LINE_WIDTH-1:0] line;
 	
 // Instantiation of Axi Bus Interface S_AXI
 	comperator_axi_ip_v1_0_S_AXI # ( 
@@ -169,15 +182,34 @@
 	assign s_frame0_axis_tready = frame0_ready | ~running;
 	assign s_frame1_axis_tready = frame1_ready | ~running;
 
-    comperator_axi_ip_v1_0_simple_controller controller_0(
+//    comperator_axi_ip_v1_0_simple_controller controller_0(
+//        .aclk(aclk),
+//        .aresetn(resetn),
+//        .go(go),
+//        .go0(go_0),
+//        .go1(go_1),
+//        .done0(frame_0_done),
+//        .done1(frame_1_done),
+//        .running(running)
+//    );
+
+    comperator_axi_ip_v1_0_controller #(
+        .BLOCK_SIZE(BLOCK_SIZE)
+    ) controller_1 (
         .aclk(aclk),
         .aresetn(resetn),
-        .go(go),
-        .go0(go_0),
-        .go1(go_1),
-        .done0(frame_0_done),
-        .done1(frame_1_done),
-        .running(running)
+        .go1(go_0),
+        .go2(go_1),
+        .done1(frame_0_done),
+        .done2(frame_1_done),
+        .eol1(frame_0_eol),
+        .eol2(frame_1_eol),
+        .sof1(frame_0_sof),
+        .sof2(frame_1_sof),
+        .cmp_go(cmp_go),
+        .video_go(),
+        .video_done(1'b1),
+        .count(line_count)
     );
     
     comperator_axi_ip_v1_0_block_reader #(
@@ -191,7 +223,9 @@
         .s_axis_tuser(s_frame1_axis_tuser),
         .s_axis_tvalid(s_frame1_axis_tvalid),
         .go(go_1),
-        .done(frame_1_done)
+        .done(frame_1_done),
+        .block(block),
+        .count(block_count)
     );
     
     comperator_axi_ip_v1_0_line_reader #(
@@ -205,8 +239,70 @@
         .s_axis_tuser(s_frame0_axis_tuser),
         .s_axis_tvalid(s_frame0_axis_tvalid),
         .go(go_0),
-        .done(frame_0_done)
+        .done(frame_0_done),
+        .line(line)
     );
+    
+    comperator_axi_ip_v1_0_compare #(
+        .FRAME_WIDTH(FRAME_WIDTH),
+        .BLOCK_SIZE(BLOCK_SIZE),
+        .COMPARE_STEP(BLOCK_SIZE)
+    ) compare_0 (
+        .aclk(aclk),
+        .aresetn(resetn),
+        .block_count(block_count),
+        .line_count(line_count),
+        .line(line),
+        .block(block),
+        .go(cmp_go),
+        .done(),
+        .sum()
+    );
+    
+    comperator_axi_ip_v1_0_sof_detector frame_0_sof_detector(
+        .aclk(aclk),
+        .aresetn(resetn),
+        .s_axis_tdata(s_frame0_axis_tdata),
+        .s_axis_tlast(s_frame0_axis_tlast),
+        .s_axis_tuser(s_frame0_axis_tuser),
+        .s_axis_tvalid(s_frame0_axis_tvalid),
+        .go(go_0),
+        .sof(frame_0_sof)
+    );
+    
+    comperator_axi_ip_v1_0_sof_detector frame_1_sof_detector(
+        .aclk(aclk),
+        .aresetn(resetn),
+        .s_axis_tdata(s_frame1_axis_tdata),
+        .s_axis_tlast(s_frame1_axis_tlast),
+        .s_axis_tuser(s_frame1_axis_tuser),
+        .s_axis_tvalid(s_frame1_axis_tvalid),
+        .go(go_1),
+        .sof(frame_1_sof)
+    );
+    
+    comperator_axi_ip_v1_0_eol_detector frame_0_eol_detector(
+        .aclk(aclk),
+        .aresetn(resetn),
+        .s_axis_tdata(s_frame0_axis_tdata),
+        .s_axis_tlast(s_frame0_axis_tlast),
+        .s_axis_tuser(s_frame0_axis_tuser),
+        .s_axis_tvalid(s_frame0_axis_tvalid),
+        .go(go_0),
+        .eol(frame_0_eol)
+    );
+    
+    comperator_axi_ip_v1_0_eol_detector frame_1_eol_detector(
+        .aclk(aclk),
+        .aresetn(resetn),
+        .s_axis_tdata(s_frame1_axis_tdata),
+        .s_axis_tlast(s_frame1_axis_tlast),
+        .s_axis_tuser(s_frame1_axis_tuser),
+        .s_axis_tvalid(s_frame1_axis_tvalid),
+        .go(go_1),
+        .eol(frame_1_eol)
+    );
+    
 	// User logic ends
 
 	endmodule
